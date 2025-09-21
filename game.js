@@ -438,10 +438,12 @@ class Game extends Phaser.Scene {
     background.setDepth(-10); // Enviar al fondo más profundo
 
     // HUD
-    this.add.text(20, 12, "La Ruta de la Reina Ydalina", {
-      font: "bold 20px Arial",
-      color: "#ffd166",
-    });
+    this.add
+      .text(W / 2, 12, "La Ruta de la Reina Ydalina", {
+        font: "bold 20px Arial",
+        color: "#ffd166",
+      })
+      .setOrigin(0.5, 0);
     this.progressBar = this.add
       .rectangle(20, 50, W - 40, 14, 0x1a2a3a)
       .setOrigin(0);
@@ -960,21 +962,21 @@ class Victory extends Phaser.Scene {
         "y desde entonces ha luchado incansablemente por sus hijas.\n" +
         "Que dejó Paraguay buscando un mejor futuro en Chile,\n" +
         "que cada día maneja por las calles dando lo mejor de sí.\n\n" +
-        "Estoy orgulloso de tu fortaleza, de tu amor incondicional,\n" +
-        "de cada sacrificio que has hecho por tu familia.\n" +
-        "Eres inspiración pura, mi conductora favorita,\n" +
-        "y me siento afortunado de conocerte y amarte 💛",
+        "Admiro tu fortaleza, tu amor incondicional hacia tu familia,\n" +
+        "y cada sacrificio que has hecho por ellas.\n" +
+        "Eres inspiración pura, una mujer ejemplar,\n" +
+        "y me siento afortunado de conocerte 💛",
 
       // Mensaje sobre cómo se conocieron en septiembre 2016
       "Para ti, Ydalina ✨\n\n" +
         "Septiembre del 2016... un año difícil para ti por la partida de tu papá, " +
-        "pero fue cuando Dios decidió que nuestros caminos se cruzaran. " +
-        "En medio de tu dolor, la vida nos regaló este encuentro, " +
-        "como si el cielo supiera que necesitábamos estar juntos.\n\n" +
+        "pero fue cuando la vida decidió que nuestros caminos se cruzaran. " +
+        "En medio de tu dolor, el destino nos regaló esta amistad, " +
+        "como si el universo supiera que nos íbamos a apoyar mutuamente.\n\n" +
         "Han pasado años desde aquel septiembre que cambió nuestras vidas, " +
-        "y cada día agradezco a Dios por haberte puesto en mi camino. " +
-        "Tu fe, tu fortaleza y tu amor me inspiran cada día. " +
-        "Fuiste mi regalo en el momento perfecto, mi amor eterno 🙏💛",
+        "y cada día agradezco haber tenido la oportunidad de conocerte. " +
+        "Tu fe, tu fortaleza y tu dedicación me inspiran cada día. " +
+        "Eres una persona muy especial 🙏💛",
     ];
 
     // Seleccionar mensaje aleatorio
