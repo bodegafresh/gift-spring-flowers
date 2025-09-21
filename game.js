@@ -971,7 +971,7 @@ class Victory extends Phaser.Scene {
       "Para ti, Ydalina ✨\n\n" +
         "Septiembre del 2016... un año difícil para ti por la partida de tu papá, " +
         "pero fue cuando la vida decidió que nuestros caminos se cruzaran. " +
-        "En medio de tu dolor, el destino nos regaló esta amistad, " +
+        "En medio de tu dolor, el destino nos regaló conocernos, " +
         "como si el universo supiera que nos íbamos a apoyar mutuamente.\n\n" +
         "Han pasado años desde aquel septiembre que cambió nuestras vidas, " +
         "y cada día agradezco haber tenido la oportunidad de conocerte. " +
