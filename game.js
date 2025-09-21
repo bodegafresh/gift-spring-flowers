@@ -900,6 +900,10 @@ class Victory extends Phaser.Scene {
 
     // Configurar UI independientemente del fondo
     this.setupUI(data);
+
+    // Re-colocar UI cuando cambie el alto real del canvas
+    this.scale.on("resize", this.layoutVictory, this);
+    this.layoutVictory(); // primera vez
   }
 
   useStaticFallback(overVideo = false) {
@@ -938,7 +942,7 @@ class Victory extends Phaser.Scene {
       .setDepth(11);
 
     // Crear una caja semi-transparente en la parte inferior para el mensaje principal
-    const textBox = this.add.rectangle(
+    this.textBox = this.add.rectangle(
       W / 2,
       H - 200,
       W - 20,
@@ -946,7 +950,7 @@ class Victory extends Phaser.Scene {
       0x000000,
       0.8
     );
-    textBox.setDepth(10);
+    this.textBox.setDepth(10);
 
     // Array de mensajes emotivos que se muestran aleatoriamente
     const messages = [
@@ -977,7 +981,7 @@ class Victory extends Phaser.Scene {
     const randomMessage = messages[Math.floor(Math.random() * messages.length)];
     console.log("Mensaje seleccionado aleatoriamente para Ydalina");
 
-    this.add
+    this.message = this.add
       .text(W / 2, H - 200, randomMessage, {
         font: "12px Arial",
         color: "#ffffff",
@@ -988,18 +992,37 @@ class Victory extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(11);
 
-    const btn = this.add
+    this.retryBtn = this.add
       .rectangle(W / 2, H - 50, 220, 40, 0xffd166)
       .setInteractive({ useHandCursor: true })
       .setDepth(11);
-    this.add
+    this.retryLbl = this.add
       .text(W / 2, H - 50, "Volver a jugar", {
         font: "bold 18px Arial",
         color: "#000",
       })
       .setOrigin(0.5)
       .setDepth(12);
-    btn.on("pointerdown", () => this.scene.start("game"));
+    this.retryBtn.on("pointerdown", () => this.scene.start("game"));
+  }
+
+  layoutVictory() {
+    // tamaño real del canvas
+    const cam = this.cameras.main;
+    const Wreal = cam.width;
+    const Hreal = cam.height;
+
+    // recolocar elementos "al borde inferior"
+    if (this.textBox) {
+      this.textBox.setPosition(Wreal / 2, Hreal - 200);
+      this.textBox.setSize(Wreal - 20, 240);
+    }
+    if (this.message) {
+      this.message.setPosition(Wreal / 2, Hreal - 200);
+      this.message.setWordWrapWidth(Wreal - 60);
+    }
+    if (this.retryBtn) this.retryBtn.setPosition(Wreal / 2, Hreal - 50);
+    if (this.retryLbl) this.retryLbl.setPosition(Wreal / 2, Hreal - 50);
   }
 
   update() {

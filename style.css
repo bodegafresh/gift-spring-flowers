@@ -15,8 +15,9 @@ body {
 }
 #game {
   width: 100vw;
-  height: 100vh;
+  height: 100dvh; /* alto visible real, no 100vh */
   touch-action: manipulation;
+  padding-bottom: env(safe-area-inset-bottom); /* margen para notch / barras */
 }
 canvas {
   display: block;
