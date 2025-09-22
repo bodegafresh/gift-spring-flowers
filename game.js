@@ -45,11 +45,10 @@ class Boot extends Phaser.Scene {
     // Cargar el sprite sheet desde assets para fondo
     this.load.image("background_sprites", "assets/sprite01.png");
 
-    // Cargar el sprite sheet como atlas para el auto progresivo
-    // Los autos son más anchos, ajustando dimensiones
+    // La hoja real es 704×1472 con 3 filas de autos (704×368 cada uno)
     this.load.spritesheet("car_progress", "assets/sprite01.png", {
-      frameWidth: 240,
-      frameHeight: 120,
+      frameWidth: 704,
+      frameHeight: 368,
     });
 
     // Cargar imagen de fondo del juego
@@ -214,57 +213,101 @@ class AnimatedBackground {
 
 // ----- Clase para el auto progresivo -----
 class ProgressiveCar {
-  constructor(scene, startX, y) {
+  constructor(scene, startX, roadCenterY, roadHeight = 90) {
     this.scene = scene;
-    this.startX = startX; // Posición inicial (derecha)
-    this.endX = W - 60; // Posición final (cerca de "Meta")
-    this.y = y;
+    this.startX = startX;
+    this.endX = W - 60;
+    this.y = roadCenterY; // centro de la carretera
+    this.h = roadHeight; // alto visible de la carretera
     this.currentProgress = 0;
     this.currentCarFrame = 0;
-    this.currentX = startX; // Posición actual del auto
+    this.currentX = startX;
 
-    // Crear el sprite del auto con mayor tamaño
-    this.carSprite = this.scene.add.image(
-      startX,
-      y,
-      "car_progress",
-      CAR_PROGRESS_CONFIG.CAR_FRAMES[0]
-    );
-    this.carSprite.setScale(0.5); // Ajustar tamaño para las nuevas dimensiones
+    // sprite del coche anclado a la BASE
+    this.carSprite = this.scene.add
+      .image(startX, 0, "car_progress", 0)
+      .setOrigin(0.5, 1); // bottom-center
 
-    // Crear las ruedas (inicialmente invisibles)
-    this.wheelSprites = [];
-    this.createWheels();
+    // acolchados para que quepa sin comerse ruedas ni techo
+    const PAD_TOP = 14;
+    const PAD_BOTTOM = 6;
+    const usable = 368 - PAD_TOP - PAD_BOTTOM;
+    const scale = Math.min((W - 60) / 704, (this.h - 2) / usable);
+    this.carSprite.setScale(scale);
+
+    // apoyar exactamente en el borde inferior de la carretera
+    this.carSprite.y = this.y + this.h / 2 - PAD_BOTTOM * scale;
+
+    // máscara: todo lo que salga del rectángulo de carretera NO se ve
+    const maskG = this.scene.add.graphics();
+    maskG
+      .fillStyle(0xffffff, 1)
+      .fillRect(W / 2 - (W - 40) / 2, this.y - this.h / 2, W - 40, this.h);
+    maskG.setVisible(false);
+    this.carSprite.setMask(maskG.createGeometryMask());
+
+    // Aplica frame inicial recortado y alineado
+    this.setFrameAligned(0);
+
+    // ----- Rebote -----
+    // Amplitud en píxeles (escala-aware): 3–5 px suele verse natural
+    this.bounceAmp = Math.max(2, Math.round(4 * scale));
+    this._bouncing = false;
+    this.bounce = (amp = this.bounceAmp, upDur = 90, downDur = 120) => {
+      if (this._bouncing) return;
+      this._bouncing = true;
+      const originalY = this.carSprite.y;
+      // Primer tween: subir
+      this.scene.tweens.add({
+        targets: this.carSprite,
+        y: originalY - amp,
+        duration: upDur,
+        ease: "Sine.easeOut",
+        onComplete: () => {
+          // Segundo tween: bajar
+          this.scene.tweens.add({
+            targets: this.carSprite,
+            y: originalY,
+            duration: downDur,
+            ease: "Sine.easeIn",
+            onComplete: () => (this._bouncing = false),
+          });
+        },
+      });
+    };
+
+    // Timer de pestañeo
+    this.blinkEvent = this.scene.time.addEvent({
+      delay: 2500,
+      loop: true,
+      callback: () => {
+        if (this.currentCarFrame === 0) {
+          this.setFrameAligned(1); // ojos cerrados
+          this.bounce(); // ¡rebote al pestañar!
+          this.scene.time.delayedCall(120, () => this.setFrameAligned(0));
+        }
+      },
+    });
+  }
+
+  // Cambia el frame manteniendo la base fija
+  setFrameAligned(idx) {
+    this.carSprite.setFrame(idx); // sin recortes
+    // la base no cambia (origin 0.5,1 ya hace el trabajo)
+    this.currentCarFrame = idx;
   }
 
   createWheels() {
-    // Posiciones aproximadas de las ruedas relativas al auto
-    const wheelPositions = [
-      { x: this.currentX - 30, y: this.y + 35 }, // Rueda trasera
-      { x: this.currentX + 30, y: this.y + 35 }, // Rueda delantera
-    ];
-
-    wheelPositions.forEach((pos, index) => {
-      const wheel = this.scene.add.image(
-        pos.x,
-        pos.y,
-        "car_progress",
-        CAR_PROGRESS_CONFIG.WHEEL_FRAMES[0]
-      );
-      wheel.setScale(0.3); // Ruedas más pequeñas para las nuevas dimensiones
-      wheel.setVisible(false); // Inicialmente invisibles
-      this.wheelSprites.push(wheel);
-    });
+    /* ya no se usa */
   }
 
   updateProgress(progressPercent) {
     this.currentProgress = progressPercent;
 
-    // Calcular nueva posición X basada en el progreso (de derecha a izquierda)
+    // mover a lo largo de la carretera
     const progressRatio = progressPercent / 100;
     this.currentX = this.startX + (this.endX - this.startX) * progressRatio;
 
-    // Mover el auto suavemente a la nueva posición
     this.scene.tweens.add({
       targets: this.carSprite,
       x: this.currentX,
@@ -272,77 +315,22 @@ class ProgressiveCar {
       ease: "Power2",
     });
 
-    // Determinar qué frame del auto usar basado en el progreso
-    let carFrameIndex = 0;
-    for (let i = 0; i < CAR_PROGRESS_CONFIG.PROGRESS_THRESHOLDS.length; i++) {
-      if (progressPercent >= CAR_PROGRESS_CONFIG.PROGRESS_THRESHOLDS[i]) {
-        carFrameIndex = i;
-      }
-    }
-
-    // Cambiar frame del auto si es necesario
-    if (carFrameIndex !== this.currentCarFrame) {
-      this.currentCarFrame = carFrameIndex;
-      this.carSprite.setFrame(CAR_PROGRESS_CONFIG.CAR_FRAMES[carFrameIndex]);
-
-      // Mostrar ruedas cuando el auto empiece a moverse (progreso > 0)
-      if (progressPercent > 0) {
-        this.wheelSprites.forEach((wheel, index) => {
-          wheel.setVisible(true);
-          wheel.setFrame(CAR_PROGRESS_CONFIG.WHEEL_FRAMES[carFrameIndex]);
-
-          // Mover ruedas junto con el auto
-          const wheelX = index === 0 ? this.currentX - 30 : this.currentX + 30;
-          this.scene.tweens.add({
-            targets: wheel,
-            x: wheelX,
-            duration: 300,
-            ease: "Power2",
-          });
-        });
-
-        // Animar ruedas girando
-        this.animateWheels();
-      }
-    } else if (progressPercent > 0) {
-      // Solo mover las ruedas si ya están visibles
-      this.wheelSprites.forEach((wheel, index) => {
-        if (wheel.visible) {
-          const wheelX = index === 0 ? this.currentX - 30 : this.currentX + 30;
-          this.scene.tweens.add({
-            targets: wheel,
-            x: wheelX,
-            duration: 300,
-            ease: "Power2",
-          });
-        }
-      });
+    // Si quieres usar el frame 2 (auto con flores) al 100%:
+    if (progressPercent >= 100) {
+      this.setFrameAligned(2); // auto con flores
+      this.bounce(this.bounceAmp + 2, 110, 140); // rebote "win"
+    } else if (this.currentCarFrame === 2) {
+      this.setFrameAligned(0);
     }
   }
 
   animateWheels() {
-    // Hacer que las ruedas giren cuando hay progreso
-    if (this.currentProgress > 0) {
-      this.wheelSprites.forEach((wheel) => {
-        // Detener animación anterior si existe
-        this.scene.tweens.killTweensOf(wheel);
-
-        // Crear nueva animación de rotación
-        this.scene.tweens.add({
-          targets: wheel,
-          rotation: wheel.rotation + Math.PI * 2,
-          duration: 1000 - this.currentProgress * 8, // Más rápido con más progreso
-          repeat: -1,
-          ease: "Linear",
-        });
-      });
-    }
+    /* ya no se usa */
   }
 
   destroy() {
     if (this.carSprite) this.carSprite.destroy();
-    this.wheelSprites.forEach((wheel) => wheel.destroy());
-    this.wheelSprites = [];
+    if (this.blinkEvent) this.blinkEvent.remove(false);
   }
 }
 
@@ -388,10 +376,9 @@ class Menu extends Phaser.Scene {
 
     const how =
       "Toca y arrastra para intercambiar piezas adyacentes.\n" +
-      "Forma líneas de 3+ para avanzar.\n" +
-      "🇵🇾 Paraguay = gran avance, 🍀 Trébol = turbo,\n🌼 Flores = suma ramos, 🇨🇱 Chile = progreso";
+      "Forma líneas de 3+ para avanzar.";
     this.add
-      .text(W / 2, 240, how, {
+      .text(W / 2, 280, how, {
         font: "18px Arial",
         color: "#eaeaea",
         align: "center",
@@ -399,10 +386,10 @@ class Menu extends Phaser.Scene {
       .setOrigin(0.5);
 
     const btn = this.add
-      .rectangle(W / 2, 320, 220, 50, 0xffd166)
+      .rectangle(W / 2, 360, 220, 50, 0xffd166)
       .setInteractive({ useHandCursor: true });
     this.add
-      .text(W / 2, 320, "Comenzar", { font: "bold 20px Arial", color: "#000" })
+      .text(W / 2, 360, "Comenzar", { font: "bold 20px Arial", color: "#000" })
       .setOrigin(0.5);
     btn.on("pointerdown", () => this.scene.start("game"));
   }
@@ -473,10 +460,15 @@ class Game extends Phaser.Scene {
     // Carretera estética
     const road = this.add
       .rectangle(W / 2, TOP_OFFSET - 80, W - 40, 90, 0x182235)
-      .setStrokeStyle(3, 0x2d3a52);
+      .setStrokeStyle(3, 0x2d3a52)
+      .setDepth(-1); // Asegurar que quede detrás del auto
 
     // Auto progresivo en lugar del estático (empieza desde la derecha)
-    this.progressiveCar = new ProgressiveCar(this, 60, TOP_OFFSET - 80);
+    // roadRect es tu contenedor/rectángulo gris oscuro bajo "Meta"
+    const roadCenterY = TOP_OFFSET - 80;
+    const roadHeight = 90;
+
+    this.progressiveCar = new ProgressiveCar(this, 60, roadCenterY, roadHeight);
 
     // Crear tablero y sprites
     for (let r = 0; r < ROWS; r++) {
