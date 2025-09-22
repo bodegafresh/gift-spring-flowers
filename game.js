@@ -1,3 +1,4 @@
+// Animación de rebote para el auto del HUD
 // ----- Configuración general -----
 const W = 420,
   H = 820;
@@ -51,10 +52,10 @@ class Boot extends Phaser.Scene {
       frameHeight: 430,
     });
 
-  // Cargar imagen de fondo del juego
-  this.load.image("game_background", "assets/background.jpg");
-  // Cargar imagen de fondo para el camino
-  this.load.image("road_background", "assets/background_stg.png");
+    // Cargar imagen de fondo del juego
+    this.load.image("game_background", "assets/background.jpg");
+    // Cargar imagen de fondo para el camino
+    this.load.image("road_background", "assets/background_stg.png");
 
     // Cargar video para la pantalla de victoria (autoplay-friendly)
     console.log("Cargando video de victoria...");
@@ -463,15 +464,39 @@ class Game extends Phaser.Scene {
       color: "#cfe7ff",
     });
 
+    // Fondo del HUD de Ramos
+    const hudX = 20;
+    const hudY = 90;
+    const hudW = W - 40;
+    const hudH = 110;
+    const hudBg = this.add
+      .image(hudX + hudW / 2, hudY + hudH / 2, "road_background")
+      .setOrigin(0.5)
+      .setDepth(-2);
+    hudBg.setScale(hudW / hudBg.width, hudH / hudBg.height);
+
     this.add.text(20, 98, "Ramos 🌼:", {
       font: "16px Arial",
       color: "#ffd166",
     });
-    // Imagen del vehículo junto al contador de Ramos (ajustado para que se vea igual que en el bloque)
+    // Imagen del vehículo en el HUD, inicia más atrás y avanza según el progreso
+    const carMargin = 60; // margen para que el auto no salga del borde
+    this.ramosCarStartX = hudX + carMargin;
+    this.ramosCarEndX = hudX + hudW - carMargin;
+    this.ramosCarY = hudY + hudH - 10;
     this.ramosCar = this.add
-      .image(60, TOP_OFFSET - 40, "car_progress", 0)
-      .setScale(0.2)
-      .setOrigin(0.2, 1); // bottom-center para mostrar ruedas completas
+      .image(this.ramosCarStartX, this.ramosCarY, "car_progress", 0)
+      .setScale(0.22)
+      .setOrigin(0.5, 1);
+    // Animación de rebote para el auto del HUD (dentro de create)
+    this.tweens.add({
+      targets: this.ramosCar,
+      y: this.ramosCar.y - 8,
+      duration: 220,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
     this.ramosText = this.add.text(110, 98, "0", {
       font: "bold 18px Arial",
       color: "#ffffff",
@@ -484,19 +509,7 @@ class Game extends Phaser.Scene {
     });
 
     // Carretera estética con imagen de fondo
-    const roadY = TOP_OFFSET - 80;
-    const roadH = 90;
-    const roadW = W - 40;
-    const roadBg = this.add.image(W / 2, roadY, "road_background")
-      .setOrigin(0.5, 0.5)
-      .setDepth(-2);
-    // Escalar la imagen para cubrir el área del camino
-    roadBg.setScale(roadW / roadBg.width, roadH / roadBg.height);
-    // Borde del camino
-    const road = this.add
-      .rectangle(W / 2, roadY, roadW, roadH, 0x182235)
-      .setStrokeStyle(3, 0x2d3a52)
-      .setDepth(-1); // Asegurar que quede delante del fondo
+    // ...elimina el rectángulo oscuro, solo deja la imagen si es necesario en el tablero...
 
     // Auto progresivo en lugar del estático (empieza desde la derecha)
     // roadRect es tu contenedor/rectángulo gris oscuro bajo "Meta"
@@ -828,9 +841,16 @@ class Game extends Phaser.Scene {
     this.progressFill.width = w;
     this.progressText.setText(`Meta: ${pct}%`);
 
-    // Actualizar el auto progresivo
+    // Actualizar el auto progresivo principal
     if (this.progressiveCar) {
       this.progressiveCar.updateProgress(pct);
+    }
+    // Efecto de avance del auto en el HUD de Ramos
+    if (this.ramosCar) {
+      const x =
+        this.ramosCarStartX +
+        (this.ramosCarEndX - this.ramosCarStartX) * (pct / 100);
+      this.ramosCar.x = x;
     }
   }
 
