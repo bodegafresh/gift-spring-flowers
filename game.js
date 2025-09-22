@@ -47,12 +47,14 @@ class Boot extends Phaser.Scene {
 
     // La hoja real es 704×1472 con 3 filas de autos (704×368 cada uno)
     this.load.spritesheet("car_progress", "assets/sprite01.png", {
-      frameWidth: 704,
-      frameHeight: 368,
+      frameWidth: 690,
+      frameHeight: 430,
     });
 
-    // Cargar imagen de fondo del juego
-    this.load.image("game_background", "assets/background.jpg");
+  // Cargar imagen de fondo del juego
+  this.load.image("game_background", "assets/background.jpg");
+  // Cargar imagen de fondo para el camino
+  this.load.image("road_background", "assets/background_stg.png");
 
     // Cargar video para la pantalla de victoria (autoplay-friendly)
     console.log("Cargando video de victoria...");
@@ -109,7 +111,7 @@ class Boot extends Phaser.Scene {
       rt.destroy();
     };
     mk("t_car", 0x4dabf7, "🇵🇾");
-    mk("t_fuel", 0x2ec4b6, "🍀");
+    mk("t_fuel", 0xb42ec4, "🍀");
     mk("t_flower", 0xffd166, "🌼");
     mk("t_block", 0xff6b6b, "🇨🇱");
     this.scene.start("menu");
@@ -222,6 +224,8 @@ class ProgressiveCar {
     this.currentProgress = 0;
     this.currentCarFrame = 0;
     this.currentX = startX;
+    this.TOP_TRIM = [34, 10, 10]; // recorte arriba (px en el frame original 704x368)
+    this.BASELINE = [12, 12, 12]; // px desde la base del frame hasta el “piso” real
 
     // sprite del coche anclado a la BASE
     this.carSprite = this.scene.add
@@ -229,20 +233,19 @@ class ProgressiveCar {
       .setOrigin(0.5, 1); // bottom-center
 
     // acolchados para que quepa sin comerse ruedas ni techo
-    const PAD_TOP = 14;
-    const PAD_BOTTOM = 6;
-    const usable = 368 - PAD_TOP - PAD_BOTTOM;
-    const scale = Math.min((W - 60) / 704, (this.h - 2) / usable);
+    const maxTrim = Math.max(...this.TOP_TRIM);
+    const usableFrameHeight = 368 - maxTrim - Math.max(...this.BASELINE); // alto útil
+    const scaleToRoad = (this.h - 4) / usableFrameHeight; // -4 de aire
+    const scaleToWidth = (W - 60) / 704;
+    const scale = Math.min(scaleToRoad, scaleToWidth);
     this.carSprite.setScale(scale);
 
-    // apoyar exactamente en el borde inferior de la carretera
-    this.carSprite.y = this.y + this.h / 2 - PAD_BOTTOM * scale;
+    this.baseY = this.y + this.h / 2; // borde inferior del rect
+    this.applyFrame(0, false);
 
     // máscara: todo lo que salga del rectángulo de carretera NO se ve
-    const maskG = this.scene.add.graphics();
-    maskG
-      .fillStyle(0xffffff, 1)
-      .fillRect(W / 2 - (W - 40) / 2, this.y - this.h / 2, W - 40, this.h);
+    const maskG = scene.add.graphics().fillStyle(0xffffff, 1);
+    maskG.fillRect(W / 2 - (W - 40) / 2, this.y - this.h / 2, W - 40, this.h);
     maskG.setVisible(false);
     this.carSprite.setMask(maskG.createGeometryMask());
 
@@ -251,7 +254,7 @@ class ProgressiveCar {
 
     // ----- Rebote -----
     // Amplitud en píxeles (escala-aware): 3–5 px suele verse natural
-    this.bounceAmp = Math.max(2, Math.round(4 * scale));
+    this.bounceAmp = Math.max(3, Math.round(4 * scale));
     this._bouncing = false;
     this.bounce = (amp = this.bounceAmp, upDur = 90, downDur = 120) => {
       if (this._bouncing) return;
@@ -277,17 +280,35 @@ class ProgressiveCar {
     };
 
     // Timer de pestañeo
-    this.blinkEvent = this.scene.time.addEvent({
-      delay: 2500,
+    this.blinkEvent = scene.time.addEvent({
+      delay: 2400,
       loop: true,
       callback: () => {
-        if (this.currentCarFrame === 0) {
-          this.setFrameAligned(1); // ojos cerrados
-          this.bounce(); // ¡rebote al pestañar!
-          this.scene.time.delayedCall(120, () => this.setFrameAligned(0));
+        if (this.currentFrame === 0) {
+          this.applyFrame(1, false);
+          this.bounce();
+          scene.time.delayedCall(120, () => this.applyFrame(0, false));
         }
       },
     });
+  }
+
+  applyFrame(frameIdx, withTween = false) {
+    const trimTop = this.TOP_TRIM[frameIdx] || 0;
+    const basePx = this.BASELINE[frameIdx] || 0;
+
+    // 1) Aplica el frame
+    this.carSprite.setFrame(frameIdx);
+
+    // 2) Recorta por arriba sólo lo necesario para quitar la barra
+    this.carSprite.setCrop(0, trimTop, 704, 368 - trimTop);
+
+    // 3) Coloca la base: borde inferior visible = baseY
+    //    pero la “suela” real del neumático está basePx por encima del borde del frame
+    const baselineWorldOffset = basePx * this.scale;
+    this.carSprite.y = this.baseY + baselineWorldOffset;
+
+    this.currentFrame = frameIdx;
   }
 
   // Cambia el frame manteniendo la base fija
@@ -301,29 +322,29 @@ class ProgressiveCar {
     /* ya no se usa */
   }
 
-  updateProgress(progressPercent) {
-    this.currentProgress = progressPercent;
-
-    // mover a lo largo de la carretera
-    const progressRatio = progressPercent / 100;
-    this.currentX = this.startX + (this.endX - this.startX) * progressRatio;
-
+  updateProgress(pct) {
+    const x = this.startX + (this.endX - this.startX) * (pct / 100);
     this.scene.tweens.add({
       targets: this.carSprite,
-      x: this.currentX,
+      x,
       duration: 300,
       ease: "Power2",
     });
 
-    // Si quieres usar el frame 2 (auto con flores) al 100%:
-    if (progressPercent >= 100) {
-      this.setFrameAligned(2); // auto con flores
-      this.bounce(this.bounceAmp + 2, 110, 140); // rebote "win"
-    } else if (this.currentCarFrame === 2) {
-      this.setFrameAligned(0);
-    }
+    // Frame “flores” al 100%
+    if (pct >= 100 && this.currentFrame !== 2) this.applyFrame(2, false);
+    if (pct < 100 && this.currentFrame === 2) this.applyFrame(0, false);
   }
 
+  bounce() {
+    this.scene.tweens.timeline({
+      targets: this.car,
+      tweens: [
+        { y: this.car.y - this.bounceAmp, duration: 90, ease: "Sine.out" },
+        { y: this.car.y, duration: 120, ease: "Sine.in" },
+      ],
+    });
+  }
   animateWheels() {
     /* ya no se usa */
   }
@@ -446,6 +467,11 @@ class Game extends Phaser.Scene {
       font: "16px Arial",
       color: "#ffd166",
     });
+    // Imagen del vehículo junto al contador de Ramos (ajustado para que se vea igual que en el bloque)
+    this.ramosCar = this.add
+      .image(60, TOP_OFFSET - 40, "car_progress", 0)
+      .setScale(0.2)
+      .setOrigin(0.2, 1); // bottom-center para mostrar ruedas completas
     this.ramosText = this.add.text(110, 98, "0", {
       font: "bold 18px Arial",
       color: "#ffffff",
@@ -457,11 +483,20 @@ class Game extends Phaser.Scene {
       color: "#ffd166",
     });
 
-    // Carretera estética
+    // Carretera estética con imagen de fondo
+    const roadY = TOP_OFFSET - 80;
+    const roadH = 90;
+    const roadW = W - 40;
+    const roadBg = this.add.image(W / 2, roadY, "road_background")
+      .setOrigin(0.5, 0.5)
+      .setDepth(-2);
+    // Escalar la imagen para cubrir el área del camino
+    roadBg.setScale(roadW / roadBg.width, roadH / roadBg.height);
+    // Borde del camino
     const road = this.add
-      .rectangle(W / 2, TOP_OFFSET - 80, W - 40, 90, 0x182235)
+      .rectangle(W / 2, roadY, roadW, roadH, 0x182235)
       .setStrokeStyle(3, 0x2d3a52)
-      .setDepth(-1); // Asegurar que quede detrás del auto
+      .setDepth(-1); // Asegurar que quede delante del fondo
 
     // Auto progresivo en lugar del estático (empieza desde la derecha)
     // roadRect es tu contenedor/rectángulo gris oscuro bajo "Meta"
@@ -511,6 +546,7 @@ class Game extends Phaser.Scene {
           t = this.randomType();
         } while (this.createsImmediateMatch(r, c, t));
         this.board[r][c] = t;
+        // Usar siempre el sprite programático
         const spr = this.add
           .image(
             c * TILE + TILE / 2 + (W - COLS * TILE) / 2,
@@ -519,11 +555,9 @@ class Game extends Phaser.Scene {
           )
           .setScale(1)
           .setInteractive({ useHandCursor: true });
-
         // Almacenar coordenadas del tablero en el sprite para fácil acceso
         spr.boardRow = r;
         spr.boardCol = c;
-
         this.sprites[r][c] = spr;
       }
     }
@@ -766,14 +800,13 @@ class Game extends Phaser.Scene {
         for (let r = ptr; r >= 0; r--) {
           const t = this.randomType();
           this.board[r][c] = t;
+          // Usar siempre el sprite programático
           const spr = this.add
             .image(this.xFor(c), this.yFor(r) - H * 0.25, TYPE_KEYS[t])
             .setInteractive({ useHandCursor: true });
-
           // Almacenar coordenadas del tablero en el sprite
           spr.boardRow = r;
           spr.boardCol = c;
-
           this.sprites[r][c] = spr;
           this.tweens.add({ targets: spr, y: this.yFor(r), duration: 150 });
         }
