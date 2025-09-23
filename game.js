@@ -1,4 +1,5 @@
-// Animación de rebote para el auto del HUD
+// Efecto de pestañeo para la chica del auto en el HUD
+
 // ----- Configuración general -----
 const W = 420,
   H = 820;
@@ -49,7 +50,7 @@ class Boot extends Phaser.Scene {
     // La hoja real es 704×1472 con 3 filas de autos (704×368 cada uno)
     this.load.spritesheet("car_progress", "assets/sprite01.png", {
       frameWidth: 690,
-      frameHeight: 430,
+      frameHeight: 435,
     });
 
     // Cargar imagen de fondo del juego
@@ -337,15 +338,7 @@ class ProgressiveCar {
     if (pct < 100 && this.currentFrame === 2) this.applyFrame(0, false);
   }
 
-  bounce() {
-    this.scene.tweens.timeline({
-      targets: this.car,
-      tweens: [
-        { y: this.car.y - this.bounceAmp, duration: 90, ease: "Sine.out" },
-        { y: this.car.y, duration: 120, ease: "Sine.in" },
-      ],
-    });
-  }
+  // ...existing code...
   animateWheels() {
     /* ya no se usa */
   }
@@ -488,6 +481,19 @@ class Game extends Phaser.Scene {
       .image(this.ramosCarStartX, this.ramosCarY, "car_progress", 0)
       .setScale(0.22)
       .setOrigin(0.5, 1);
+    // Pestañeo: cambiar al frame 1 (ojos cerrados) y volver al 0
+    this.time.addEvent({
+      delay: 2400, // cada 2.4 s
+      loop: true,
+      callback: () => {
+        if (!this.ramosCar) return;
+        this.ramosCar.setFrame(1); // frame con ojos cerrados
+        this.time.delayedCall(120, () => {
+          // 120 ms de pestaña
+          if (this.ramosCar) this.ramosCar.setFrame(0); // volver a normal
+        });
+      },
+    });
     // Animación de rebote para el auto del HUD (dentro de create)
     this.tweens.add({
       targets: this.ramosCar,
